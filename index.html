@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JSON Viewer</title>
+
+  <!-- CodeMirror 5 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ajv/6.12.6/ajv.min.js"></script>
+
+  <style>
+    /* ── Theme tokens ──────────────────────────────────────────────── */
+    :root {
+      --bg:        #0f1117;
+      --bg-deep:   #090c12;
+      --bg-panel:  #0a0d14;
+      --bg-schema: #08090f;
+      --bg-input:  #1a2035;
+      --bg-node-h: #141c2e;
+      --bg-node-f: #162038;
+      --bg-btn:    #1e2433;
+      --bg-btn-h:  #252d3f;
+      --bg-err:    #2d1515;
+      --bg-warn:   #1f1200;
+
+      --border:    #1e2433;
+      --border-s:  #161d2c;
+      --border-e:  #7f1d1d;
+      --border-w:  #7c3a00;
+
+      --text:   #e2e8f0;
+      --text-h: #f8fafc;
+      --text-2: #94a3b8;
+      --text-3: #64748b;
+      --text-4: #475569;
+      --text-5: #374151;
+      --text-6: #2d3748;
+      --text-7: #2a3447;
+
+      --c-err:  #f87171;
+      --c-warn: #fb923c;
+
+      --accent:    #3b82f6;
+      --accent-bg: #1e3a5f;
+      --accent-fg: #60a5fa;
+
+      --cm-bg:     #0a0d14;
+      --cm-gutter: #0a0d14;
+      --cm-linenum:#2a3850;
+
+      --c-key:  #93c5fd;
+      --c-str:  #86efac;
+      --c-num:  #fbbf24;
+      --c-bool: #c084fc;
+      --c-null: #64748b;
+      --c-bkt:  #4b5563;
+
+      --scroll:   #1e2433;
+      --scroll-h: #2a3447;
+
+      --match-bg: rgba(234,179,8,.07);
+      --match-bd: #ca8a04;
+
+      color-scheme: dark;
+    }
+
+    [data-theme="light"] {
+      --bg:        #f8fafc;
+      --bg-deep:   #f1f5f9;
+      --bg-panel:  #ffffff;
+      --bg-schema: #fafafa;
+      --bg-input:  #f1f5f9;
+      --bg-node-h: #f1f5f9;
+      --bg-node-f: #dbeafe;
+      --bg-btn:    #e2e8f0;
+      --bg-btn-h:  #d1d5db;
+      --bg-err:    #fff1f2;
+      --bg-warn:   #fff7ed;
+
+      --border:   #e2e8f0;
+      --border-s: #e8edf5;
+      --border-e: #fca5a5;
+      --border-w: #fdba74;
+
+      --text:   #1e293b;
+      --text-h: #0f172a;
+      --text-2: #475569;
+      --text-3: #64748b;
+      --text-4: #94a3b8;
+      --text-5: #94a3b8;
+      --text-6: #94a3b8;
+      --text-7: #cbd5e1;
+
+      --c-err:  #dc2626;
+      --c-warn: #c2410c;
+
+      --accent:    #2563eb;
+      --accent-bg: #dbeafe;
+      --accent-fg: #1d4ed8;
+
+      --cm-bg:     #ffffff;
+      --cm-gutter: #f8fafc;
+      --cm-linenum:#94a3b8;
+
+      --c-key:  #1d4ed8;
+      --c-str:  #16a34a;
+      --c-num:  #d97706;
+      --c-bool: #7c3aed;
+      --c-null: #94a3b8;
+      --c-bkt:  #9ca3af;
+
+      --scroll:   #e2e8f0;
+      --scroll-h: #cbd5e1;
+
+      --match-bg: rgba(234,179,8,.1);
+      --match-bd: #d97706;
+
+      color-scheme: light;
+    }
+
+    /* ── Reset ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: background .2s, color .2s;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────── */
+    header {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      background: var(--bg);
+    }
+
+    header h1 { font-size: 15px; font-weight: 700; color: var(--text-h); white-space: nowrap; }
+
+    .badge {
+      font-size: 11px; padding: 2px 8px; border-radius: 99px;
+      white-space: nowrap; transition: background .2s, color .2s;
+    }
+
+    .url-bar { display: flex; flex: 1; max-width: 520px; gap: 6px; margin-left: auto; }
+
+    .url-input {
+      flex: 1; background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 12px;
+      padding: 5px 10px; outline: none; transition: border-color .12s;
+    }
+    .url-input:focus { border-color: var(--accent); }
+    .url-input::placeholder { color: var(--text-7); }
+
+    /* ── Buttons ───────────────────────────────────────────────────── */
+    button {
+      cursor: pointer; border: none; border-radius: 6px;
+      font-size: 12px; font-weight: 500; padding: 5px 11px;
+      transition: background .12s, color .12s, opacity .12s;
+      white-space: nowrap;
+    }
+    button:hover { opacity: .82; }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost   { background: var(--bg-btn); color: var(--text-2); }
+    .btn-ghost:hover { background: var(--bg-btn-h); color: var(--text); opacity: 1; }
+    .btn-active  { background: var(--accent-bg) !important; color: var(--accent-fg) !important; }
+    .btn-sm      { padding: 3px 8px; font-size: 11px; }
+
+    .btn-icon {
+      width: 30px; height: 28px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--bg-btn); color: var(--text-3); border-radius: 6px;
+    }
+    .btn-icon:hover { background: var(--bg-btn-h); color: var(--text); opacity: 1; }
+
+    /* ── Main split ────────────────────────────────────────────────── */
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Left panel ────────────────────────────────────────────────── */
+    .input-panel {
+      width: 42%; min-width: 280px;
+      display: flex; flex-direction: column;
+      border-right: 1px solid var(--border);
+    }
+
+    .panel-header {
+      padding: 7px 12px; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .05em; color: var(--text-3);
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      flex-shrink: 0; background: var(--bg);
+    }
+    .panel-actions { display: flex; gap: 5px; align-items: center; }
+
+    /* CodeMirror wrapper */
+    .editor-wrap { flex: 1; min-height: 0; overflow: hidden; position: relative; }
+
+    .editor-wrap .CodeMirror,
+    .schema-wrap .CodeMirror {
+      height: 100%;
+      font-family: "Fira Code", "Cascadia Code", Consolas, monospace;
+      font-size: 13px; line-height: 1.65;
+      background: var(--cm-bg) !important;
+      transition: background .2s;
+    }
+    .editor-wrap .CodeMirror-gutters,
+    .schema-wrap .CodeMirror-gutters {
+      background: var(--cm-gutter) !important;
+      border-right: 1px solid var(--border-s);
+    }
+    .editor-wrap .CodeMirror-linenumber,
+    .schema-wrap .CodeMirror-linenumber { color: var(--cm-linenum); }
+
+    .editor-wrap .CodeMirror-foldgutter-open,
+    .editor-wrap .CodeMirror-foldgutter-folded { color: var(--text-4); cursor: pointer; }
+    .editor-wrap .CodeMirror-foldmarker {
+      background: var(--accent-bg); color: var(--accent-fg);
+      border-radius: 3px; padding: 0 5px; font-size: 11px; cursor: pointer;
+    }
+    .editor-wrap .CodeMirror-matchingbracket {
+      background: var(--accent-bg) !important;
+      color: var(--text-h) !important; border-radius: 2px;
+    }
+
+    /* Override eclipse/dracula scrollbar in CM */
+    .CodeMirror-vscrollbar::-webkit-scrollbar-thumb,
+    .CodeMirror-hscrollbar::-webkit-scrollbar-thumb { background: var(--scroll); }
+
+    /* Schema panel */
+    .schema-panel {
+      border-top: 1px solid var(--border); display: none;
+      flex-direction: column; height: 200px; flex-shrink: 0;
+    }
+    .schema-panel.open { display: flex; }
+    .schema-wrap { flex: 1; min-height: 0; overflow: hidden; }
+    .schema-wrap .CodeMirror { font-size: 12px; }
+
+    /* Error bars */
+    .error-bar {
+      padding: 7px 12px; font-size: 12px;
+      font-family: "Fira Code", Consolas, monospace;
+      display: none; border-top: 1px solid var(--border-e);
+      background: var(--bg-err); color: var(--c-err); flex-shrink: 0;
+    }
+    .schema-errors {
+      padding: 7px 12px; font-size: 12px; display: none;
+      border-top: 1px solid var(--border-w); background: var(--bg-warn);
+      color: var(--c-warn); max-height: 100px; overflow-y: auto; flex-shrink: 0;
+    }
+    .schema-errors ul { padding-left: 14px; }
+    .schema-errors li { margin-bottom: 2px; font-family: "Fira Code", Consolas, monospace; }
+
+    /* ── Right panel ───────────────────────────────────────────────── */
+    .tree-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .tree-toolbar {
+      padding: 7px 12px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+      background: var(--bg);
+    }
+    .tree-info { font-size: 12px; color: var(--text-3); white-space: nowrap; flex-shrink: 0; }
+
+    .search-wrap { flex: 1; position: relative; }
+    .search-input {
+      width: 100%; background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); font-size: 12px;
+      padding: 5px 70px 5px 28px; outline: none; transition: border-color .12s;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--text-7); }
+    .search-icon {
+      position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+      color: var(--text-4); pointer-events: none;
+    }
+    .search-count {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      font-size: 11px; color: var(--text-4); white-space: nowrap;
+    }
+
+    /* Breadcrumb */
+    .breadcrumb-bar {
+      padding: 5px 12px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+      min-height: 30px; flex-shrink: 0; background: var(--bg-deep);
+    }
+    .breadcrumb-path {
+      flex: 1; font-family: "Fira Code", Consolas, monospace;
+      font-size: 12px; color: var(--accent-fg);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .breadcrumb-path.empty { color: var(--text-7); font-style: italic; font-family: inherit; }
+    .copy-path-btn {
+      padding: 2px 8px; font-size: 11px; background: var(--accent-bg);
+      color: var(--accent-fg); border-radius: 4px; cursor: pointer; border: none;
+      transition: opacity .12s; white-space: nowrap;
+    }
+
+    /* Tree container */
+    .tree-container { flex: 1; overflow: auto; padding: 10px 14px; background: var(--bg); }
+
+    .placeholder {
+      height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: var(--text-7); user-select: none;
+    }
+    .placeholder p { font-size: 13px; }
+
+    /* ── Tree nodes ────────────────────────────────────────────────── */
+    .tree-node { line-height: 1; }
+
+    .node-main {
+      display: flex; align-items: center; gap: 3px;
+      border-radius: 4px; padding: 2px 4px;
+      white-space: nowrap; position: relative; outline: none;
+      min-height: 24px; cursor: default;
+      transition: background .1s;
+    }
+    .node-main:hover  { background: var(--bg-node-h); }
+    .node-main:focus  { background: var(--bg-node-f); outline: 1px solid var(--accent); outline-offset: -1px; }
+    .node-main.active { background: var(--bg-node-f); }
+
+    .toggle {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; font-size: 8px; color: var(--text-4);
+      cursor: pointer; user-select: none; flex-shrink: 0;
+      transition: transform .12s; border-radius: 3px;
+    }
+    .toggle:hover { color: var(--text-2); background: var(--bg-btn); }
+    .toggle.open  { transform: rotate(90deg); }
+    .toggle.leaf  { cursor: default; color: transparent; pointer-events: none; }
+
+    .node-key    { color: var(--c-key);  font-weight: 500; font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
+    .node-colon  { color: var(--text-6); margin: 0 2px; }
+    .val-string  { color: var(--c-str);  font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
+    .val-number  { color: var(--c-num);  font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
+    .val-boolean { color: var(--c-bool); font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
+    .val-null    { color: var(--c-null); font-style: italic; font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
+    .val-bracket { color: var(--c-bkt);  font-family: "Fira Code", Consolas, monospace; font-size: 13px; }
+    .val-count   { color: var(--text-5); font-size: 11px; margin-left: 4px; }
+
+    .str-more {
+      color: var(--accent); font-size: 11px; margin-left: 4px;
+      cursor: pointer; font-family: inherit;
+    }
+    .str-more:hover { text-decoration: underline; }
+
+    .size-badge {
+      font-size: 10px; color: var(--text-5); background: var(--bg-node-h);
+      padding: 1px 5px; border-radius: 3px; margin-left: 4px; font-family: inherit;
+    }
+
+    .copy-val-btn {
+      opacity: 0; display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px; border-radius: 4px; background: var(--bg-btn);
+      color: var(--text-3); cursor: pointer; border: none; flex-shrink: 0;
+      transition: opacity .12s, color .12s; margin-left: auto; padding: 0;
+    }
+    .node-main:hover .copy-val-btn,
+    .node-main:focus .copy-val-btn { opacity: 1; }
+    .copy-val-btn:hover { color: var(--c-key); background: var(--bg-btn-h); opacity: 1; }
+
+    .children { padding-left: 16px; border-left: 1px solid var(--border-s); margin-left: 9px; }
+    .node-close { display: flex; align-items: center; padding: 1px 4px 1px 28px; }
+
+    .tree-node.collapsed > .children   { display: none; }
+    .tree-node.collapsed > .node-close  { display: none; }
+
+    .inline-close { display: none; }
+    .tree-node.collapsed > .node-main .inline-close { display: inline; }
+    .tree-node.collapsed > .node-main .val-count    { display: none; }
+
+    /* Search */
+    .tree-node.dimmed > .node-main { opacity: .12; }
+    .tree-node.search-match > .node-main {
+      background: var(--match-bg);
+      border-left: 2px solid var(--match-bd);
+    }
+
+    /* Copy toast */
+    .copy-toast {
+      position: fixed; background: var(--accent-bg); color: var(--accent-fg);
+      font-size: 11px; padding: 4px 10px; border-radius: 5px;
+      pointer-events: none; z-index: 9999; opacity: 0;
+      transition: opacity .15s; white-space: nowrap;
+    }
+    .copy-toast.show { opacity: 1; }
+
+    /* Drop overlay */
+    .drop-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(9,12,18,.88); z-index: 200;
+      align-items: center; justify-content: center;
+      flex-direction: column; gap: 14px;
+      border: 3px dashed var(--accent);
+    }
+    .drop-overlay.show { display: flex; }
+    .drop-overlay p { font-size: 18px; color: var(--accent-fg); font-weight: 600; }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scroll-h); }
+  </style>
+</head>
+<body>
+
+<div class="drop-overlay" id="drop-overlay">
+  <svg width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color:var(--accent-fg)">
+    <path stroke-linecap="round" stroke-linejoin="round"
+      d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 7.5m0 0L7.5 12M12 7.5V18"/>
+  </svg>
+  <p>Drop a JSON file to load it</p>
+</div>
+
+<div class="copy-toast" id="copy-toast">Copied!</div>
+
+<header>
+  <h1>JSON Viewer</h1>
+  <span class="badge" id="status-badge">Ready</span>
+
+  <div class="url-bar">
+    <input type="text" class="url-input" id="url-input" placeholder="https://… load JSON from URL" />
+    <button class="btn-ghost" onclick="loadFromUrl()">Load URL</button>
+    <label style="display:contents">
+      <button class="btn-ghost" onclick="this.closest('label').querySelector('input').click()">Load File</button>
+      <input type="file" accept=".json,application/json,text/plain" style="display:none" onchange="loadFromFile(this)">
+    </label>
+  </div>
+
+  <!-- Theme toggle -->
+  <button class="btn-icon" id="theme-btn" onclick="toggleTheme()" title="Toggle light / dark mode"></button>
+</header>
+
+<div class="main">
+  <!-- Left -->
+  <div class="input-panel">
+    <div class="panel-header">
+      Input
+      <div class="panel-actions">
+        <button class="btn-ghost btn-sm" onclick="formatJson()">Format</button>
+        <button class="btn-ghost btn-sm" onclick="minifyJson()">Minify</button>
+        <button class="btn-ghost btn-sm" onclick="clearAll()">Clear</button>
+        <button class="btn-ghost btn-sm" id="schema-btn" onclick="toggleSchema()">Schema</button>
+        <button class="btn-primary btn-sm" onclick="parseJson()">Parse ↵</button>
+      </div>
+    </div>
+
+    <div class="editor-wrap" id="editor-wrap"></div>
+
+    <div class="schema-panel" id="schema-panel">
+      <div class="panel-header">
+        JSON Schema (draft-07)
+        <div class="panel-actions">
+          <button class="btn-ghost btn-sm" onclick="validateSchema()">Validate</button>
+          <button class="btn-ghost btn-sm" onclick="clearSchema()">Clear</button>
+        </div>
+      </div>
+      <div class="schema-wrap" id="schema-wrap"></div>
+    </div>
+
+    <div class="error-bar"     id="error-bar"></div>
+    <div class="schema-errors" id="schema-errors"></div>
+  </div>
+
+  <!-- Right -->
+  <div class="tree-panel">
+    <div class="tree-toolbar">
+      <span class="tree-info" id="tree-info">No data</span>
+      <div class="search-wrap">
+        <svg class="search-icon" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+        </svg>
+        <input type="text" class="search-input" id="search-input"
+          placeholder="Search keys and values…" oninput="onSearch(this.value)" />
+        <span class="search-count" id="search-count"></span>
+      </div>
+      <button class="btn-ghost btn-sm" onclick="expandAll()">Expand all</button>
+      <button class="btn-ghost btn-sm" onclick="collapseAll()">Collapse all</button>
+    </div>
+
+    <div class="breadcrumb-bar">
+      <span class="breadcrumb-path empty" id="breadcrumb">Click a node to see its path</span>
+      <button class="copy-path-btn" id="copy-path-btn" onclick="copyPath()" style="display:none">Copy path</button>
+    </div>
+
+    <div class="tree-container" id="tree-container">
+      <div class="placeholder">
+        <svg width="38" height="38" fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <p>Paste JSON in the editor and click Parse</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Theme ────────────────────────────────────────────────────────────────────
+const ICON_MOON = `<svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+</svg>`;
+const ICON_SUN = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="5"/>
+  <line x1="12" y1="1"  x2="12" y2="3"/>  <line x1="12" y1="21" x2="12" y2="23"/>
+  <line x1="4.22" y1="4.22"   x2="5.64" y2="5.64"/>
+  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+  <line x1="1"  y1="12" x2="3"  y2="12"/> <line x1="21" y1="12" x2="23" y2="12"/>
+  <line x1="4.22" y1="19.78"  x2="5.64" y2="18.36"/>
+  <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"/>
+</svg>`;
+
+// Status badge colors per theme
+const BADGE_COLORS = {
+  dark: {
+    ready: { bg:'#1e3a5f', fg:'#60a5fa' },
+    ok:    { bg:'#14532d', fg:'#4ade80' },
+    err:   { bg:'#450a0a', fg:'#f87171' },
+    warn:  { bg:'#422006', fg:'#fb923c' },
+  },
+  light: {
+    ready: { bg:'#dbeafe', fg:'#1d4ed8' },
+    ok:    { bg:'#dcfce7', fg:'#16a34a' },
+    err:   { bg:'#fff1f2', fg:'#dc2626' },
+    warn:  { bg:'#fff7ed', fg:'#c2410c' },
+  },
+};
+
+let isDark = localStorage.getItem('jv-theme') !== 'light';
+
+function applyTheme(dark) {
+  isDark = dark;
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  document.getElementById('theme-btn').innerHTML = dark ? ICON_SUN : ICON_MOON;
+  document.getElementById('theme-btn').title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+
+  const cmTheme = dark ? 'dracula' : 'eclipse';
+  editor?.setOption('theme', cmTheme);
+  schemaCM?.setOption('theme', cmTheme);
+
+  localStorage.setItem('jv-theme', dark ? 'dark' : 'light');
+
+  // Re-render badge with correct palette
+  const cur = document.getElementById('status-badge').dataset.type || 'ready';
+  setStatus(cur, document.getElementById('status-badge').textContent);
+}
+
+function toggleTheme() { applyTheme(!isDark); }
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let editor       = null;
+let schemaCM     = null;
+let ajvInstance  = null;
+let currentData  = null;
+let currentPath  = null;
+let selectedMain = null;
+let debounceTimer = null;
+let searchTimer   = null;
+const MAX_STR = 150;
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const cmTheme = isDark ? 'dracula' : 'eclipse';
+
+  editor = CodeMirror(document.getElementById('editor-wrap'), {
+    mode: { name: 'javascript', json: true },
+    theme: cmTheme,
+    lineNumbers: true,
+    autoCloseBrackets: true,
+    matchBrackets: true,
+    foldGutter: true,
+    gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+    extraKeys: {
+      'Ctrl-Enter':   () => parseJson(),
+      'Cmd-Enter':    () => parseJson(),
+      'Ctrl-Shift-F': () => formatJson(),
+      'Cmd-Shift-F':  () => formatJson(),
+    },
+  });
+
+  editor.on('change', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      if (editor.getValue().trim()) parseJson(true);
+    }, 700);
+  });
+
+  schemaCM = CodeMirror(document.getElementById('schema-wrap'), {
+    mode: { name: 'javascript', json: true },
+    theme: cmTheme,
+    lineNumbers: true,
+    autoCloseBrackets: true,
+    matchBrackets: true,
+  });
+
+  if (typeof Ajv !== 'undefined') {
+    ajvInstance = new Ajv({ allErrors: true, jsonPointers: true });
+  }
+
+  // Apply saved theme
+  applyTheme(isDark);
+  setupDragDrop();
+
+  document.getElementById('url-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadFromUrl();
+  });
+});
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
+function setStatus(type, text) {
+  const b    = document.getElementById('status-badge');
+  const mode = isDark ? 'dark' : 'light';
+  const col  = BADGE_COLORS[mode][type] ?? BADGE_COLORS[mode].ready;
+  b.textContent       = text;
+  b.dataset.type      = type;
+  b.style.background  = col.bg;
+  b.style.color       = col.fg;
+}
+
+// ─── Error bar ────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const bar = document.getElementById('error-bar');
+  bar.textContent = '✕  ' + msg;
+  bar.style.display = 'block';
+  setStatus('err', 'Invalid JSON');
+}
+function clearError() { document.getElementById('error-bar').style.display = 'none'; }
+
+// ─── Parse ────────────────────────────────────────────────────────────────────
+function parseJson(auto = false) {
+  const text = editor.getValue().trim();
+  if (!text) { clearError(); resetTree(); setStatus('ready', 'Ready'); return; }
+
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch (e) {
+    showError(e.message);
+    if (!auto) resetTree('Fix the error and try again');
+    return;
+  }
+
+  clearError();
+  currentData = parsed;
+  setStatus('ok', 'Valid JSON');
+  renderTree(parsed);
+
+  if (document.getElementById('schema-panel').classList.contains('open')) {
+    validateSchema(true);
+  }
+}
+
+function resetTree(msg = 'Paste JSON in the editor and click Parse') {
+  currentData = null;
+  document.getElementById('tree-container').innerHTML =
+    `<div class="placeholder"><p>${msg}</p></div>`;
+  document.getElementById('tree-info').textContent = 'No data';
+  clearBreadcrumb();
+}
+
+// ─── Format / Clear ───────────────────────────────────────────────────────────
+function formatJson() {
+  const text = editor.getValue().trim();
+  if (!text) return;
+  try { editor.setValue(JSON.stringify(JSON.parse(text), null, 2)); clearError(); }
+  catch (e) { showError(e.message); }
+}
+
+function minifyJson() {
+  const text = editor.getValue().trim();
+  if (!text) return;
+  try { editor.setValue(JSON.stringify(JSON.parse(text))); clearError(); }
+  catch (e) { showError(e.message); }
+}
+
+function clearAll() {
+  editor.setValue('');
+  clearError(); clearSchemaErrors(); resetTree();
+  setStatus('ready', 'Ready');
+}
+
+// ─── URL / File loading ───────────────────────────────────────────────────────
+async function loadFromUrl() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) return;
+  setStatus('ready', 'Loading…');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    editor.setValue(await res.text());
+    parseJson();
+  } catch (e) {
+    showError('URL load failed: ' + e.message);
+    setStatus('err', 'Load failed');
+  }
+}
+
+function loadFromFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { editor.setValue(e.target.result); parseJson(); };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function setupDragDrop() {
+  const overlay = document.getElementById('drop-overlay');
+  let n = 0;
+  document.addEventListener('dragenter', e => {
+    if ([...e.dataTransfer.items].some(i => i.kind === 'file')) { n++; overlay.classList.add('show'); }
+  });
+  document.addEventListener('dragleave', () => { if (--n <= 0) { n = 0; overlay.classList.remove('show'); } });
+  document.addEventListener('dragover',  e => e.preventDefault());
+  document.addEventListener('drop', e => {
+    e.preventDefault(); n = 0; overlay.classList.remove('show');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => { editor.setValue(ev.target.result); parseJson(); };
+    reader.readAsText(file);
+  });
+}
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
+function toggleSchema() {
+  const panel = document.getElementById('schema-panel');
+  const btn   = document.getElementById('schema-btn');
+  panel.classList.toggle('open');
+  btn.classList.toggle('btn-active', panel.classList.contains('open'));
+  if (panel.classList.contains('open')) schemaCM.refresh();
+}
+
+function validateSchema(silent = false) {
+  if (!ajvInstance) return;
+  const schemaText = schemaCM.getValue().trim();
+  if (!schemaText) { if (!silent) clearSchemaErrors(); return; }
+  if (!currentData) {
+    if (!silent) showSchemaErrors(['Parse JSON first before running schema validation.']);
+    return;
+  }
+  let schema;
+  try { schema = JSON.parse(schemaText); }
+  catch (e) { showSchemaErrors([`Invalid schema: ${e.message}`]); return; }
+
+  try {
+    const validate = ajvInstance.compile(schema);
+    if (validate(currentData)) {
+      clearSchemaErrors();
+      setStatus('ok', 'Schema valid ✓');
+    } else {
+      const msgs = validate.errors.map(e =>
+        `${(e.dataPath||'(root)').replace(/^\//,'$.').replace(/\//g,'.')} — ${e.message}`);
+      showSchemaErrors(msgs);
+      setStatus('warn', `Schema: ${msgs.length} error${msgs.length !== 1 ? 's' : ''}`);
+    }
+  } catch (e) { showSchemaErrors([`Schema compile error: ${e.message}`]); }
+}
+
+function showSchemaErrors(errs) {
+  const el = document.getElementById('schema-errors');
+  el.innerHTML = '<ul>' + errs.map(e => `<li>${esc(e)}</li>`).join('') + '</ul>';
+  el.style.display = 'block';
+}
+function clearSchemaErrors() {
+  const el = document.getElementById('schema-errors');
+  el.style.display = 'none'; el.innerHTML = '';
+}
+function clearSchema() { schemaCM.setValue(''); clearSchemaErrors(); }
+
+// ─── Tree rendering ───────────────────────────────────────────────────────────
+function renderTree(data) {
+  const container = document.getElementById('tree-container');
+  container.innerHTML = '';
+  container.appendChild(buildNode(data, null, '$'));
+
+  const n    = container.querySelectorAll('.tree-node').length;
+  const type = Array.isArray(data) ? 'array'
+             : (data !== null && typeof data === 'object') ? 'object' : 'value';
+  document.getElementById('tree-info').textContent =
+    `${type} · ${n} node${n !== 1 ? 's' : ''}`;
+
+  clearBreadcrumb(); clearSearch();
+}
+
+function buildPath(parent, key, isIndex) {
+  if (isIndex) return `${parent}[${key}]`;
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(String(key))
+    ? `${parent}.${key}` : `${parent}["${key}"]`;
+}
+
+function buildNode(value, key, path) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'tree-node';
+
+  const isObj  = value !== null && typeof value === 'object';
+  const isArr  = Array.isArray(value);
+  const entries = isObj ? (isArr ? value : Object.entries(value)) : null;
+  const hasKids = !!(entries && entries.length > 0);
+
+  wrapper.dataset.searchable =
+    ((key !== null ? String(key) : '') + ' ' + (isObj ? '' : value === null ? 'null' : String(value))).toLowerCase();
+  wrapper.dataset.path = path;
+
+  const main = document.createElement('div');
+  main.className = 'node-main';
+  main.tabIndex = 0;
+  main.dataset.path = path;
+
+  const toggle = document.createElement('span');
+  toggle.className = 'toggle ' + (hasKids ? 'open' : 'leaf');
+  toggle.textContent = '▶';
+  main.appendChild(toggle);
+
+  if (key !== null) {
+    const keyEl   = document.createElement('span');
+    keyEl.className   = 'node-key';
+    keyEl.textContent = `"${key}"`;
+    main.appendChild(keyEl);
+    const colon   = document.createElement('span');
+    colon.className   = 'node-colon';
+    colon.textContent = ':';
+    main.appendChild(colon);
+  }
+
+  if (isObj) {
+    const open = document.createElement('span');
+    open.className = 'val-bracket';
+    open.textContent = isArr ? '[' : '{';
+    main.appendChild(open);
+
+    if (!hasKids) {
+      const close = document.createElement('span');
+      close.className = 'val-bracket';
+      close.textContent = isArr ? ']' : '}';
+      main.appendChild(close);
+    } else {
+      const count = document.createElement('span');
+      count.className = 'val-count';
+      count.textContent = isArr
+        ? `${entries.length} item${entries.length !== 1 ? 's' : ''}`
+        : `${entries.length} key${entries.length !== 1 ? 's' : ''}`;
+      main.appendChild(count);
+
+      const inlineClose = document.createElement('span');
+      inlineClose.className = 'val-bracket inline-close';
+      inlineClose.textContent = isArr ? ']' : '}';
+      main.appendChild(inlineClose);
+    }
+  } else {
+    appendPrimitive(main, value);
+  }
+
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'copy-val-btn';
+  copyBtn.tabIndex = -1;
+  copyBtn.title = 'Copy value as JSON';
+  copyBtn.innerHTML = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+  </svg>`;
+  copyBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    copyToClipboard(isObj ? JSON.stringify(value, null, 2) : JSON.stringify(value), copyBtn);
+  });
+  main.appendChild(copyBtn);
+
+  main.addEventListener('click',  () => setSelected(main, path));
+  main.addEventListener('focus',  () => setSelected(main, path));
+  main.addEventListener('keydown', e => handleKeyNav(e, main, wrapper));
+
+  wrapper.appendChild(main);
+
+  if (hasKids) {
+    const childWrap = document.createElement('div');
+    childWrap.className = 'children';
+
+    if (isArr) {
+      value.forEach((item, i) =>
+        childWrap.appendChild(buildNode(item, i, buildPath(path, i, true))));
+    } else {
+      Object.entries(value).forEach(([k, v]) =>
+        childWrap.appendChild(buildNode(v, k, buildPath(path, k, false))));
+    }
+
+    const closeRow = document.createElement('div');
+    closeRow.className = 'node-close';
+    const closeBracket = document.createElement('span');
+    closeBracket.className = 'val-bracket';
+    closeBracket.textContent = isArr ? ']' : '}';
+    closeRow.appendChild(closeBracket);
+
+    wrapper.appendChild(childWrap);
+    wrapper.appendChild(closeRow);
+
+    const doToggle = () => {
+      const col = wrapper.classList.toggle('collapsed');
+      toggle.classList.toggle('open', !col);
+    };
+    main.addEventListener('click', e => {
+      if (copyBtn.contains(e.target)) return;
+      doToggle();
+    });
+  }
+
+  return wrapper;
+}
+
+function appendPrimitive(container, value) {
+  if (typeof value === 'string') {
+    const bytes = new TextEncoder().encode(value).length;
+    const span  = document.createElement('span');
+    span.className = 'val-string';
+
+    if (value.length > MAX_STR) {
+      const preview = escStr(value.slice(0, MAX_STR));
+      span.textContent = `"${preview}`;
+      const more = document.createElement('span');
+      more.className = 'str-more';
+      let expanded = false;
+      more.textContent = `…+${value.length - MAX_STR} chars"`;
+      more.addEventListener('click', e => {
+        e.stopPropagation();
+        expanded = !expanded;
+        span.textContent = expanded ? `"${escStr(value)}"` : `"${preview}`;
+        more.textContent = expanded ? ' [collapse]' : `…+${value.length - MAX_STR} chars"`;
+      });
+      container.appendChild(span);
+      container.appendChild(more);
+    } else {
+      span.textContent = `"${escStr(value)}"`;
+      container.appendChild(span);
+    }
+
+    if (bytes > 100) {
+      const badge = document.createElement('span');
+      badge.className = 'size-badge';
+      badge.textContent = fmtBytes(bytes);
+      container.appendChild(badge);
+    }
+  } else if (typeof value === 'number') {
+    const s = document.createElement('span');
+    s.className = 'val-number'; s.textContent = value;
+    container.appendChild(s);
+  } else if (typeof value === 'boolean') {
+    const s = document.createElement('span');
+    s.className = 'val-boolean'; s.textContent = value;
+    container.appendChild(s);
+  } else if (value === null) {
+    const s = document.createElement('span');
+    s.className = 'val-null'; s.textContent = 'null';
+    container.appendChild(s);
+  }
+}
+
+// ─── Keyboard navigation ──────────────────────────────────────────────────────
+function handleKeyNav(e, main, wrapper) {
+  switch (e.key) {
+    case 'ArrowDown': e.preventDefault(); getAdjacentVisible(main,  1)?.focus(); break;
+    case 'ArrowUp':   e.preventDefault(); getAdjacentVisible(main, -1)?.focus(); break;
+    case 'ArrowRight':
+      e.preventDefault();
+      if (wrapper.classList.contains('collapsed')) {
+        wrapper.classList.remove('collapsed');
+        wrapper.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
+      } else {
+        wrapper.querySelector('.children > .tree-node > .node-main')?.focus();
+      }
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      if (!wrapper.classList.contains('collapsed') && wrapper.querySelector('.children')) {
+        wrapper.classList.add('collapsed');
+        wrapper.querySelector(':scope > .node-main > .toggle')?.classList.remove('open');
+      } else {
+        wrapper.parentElement?.closest('.tree-node')
+          ?.querySelector(':scope > .node-main')?.focus();
+      }
+      break;
+    case ' ':
+      e.preventDefault();
+      if (wrapper.querySelector('.children')) {
+        const col = wrapper.classList.toggle('collapsed');
+        wrapper.querySelector(':scope > .node-main > .toggle')?.classList.toggle('open', !col);
+      }
+      break;
+  }
+}
+
+function getAdjacentVisible(current, dir) {
+  const all = [...document.querySelectorAll('.node-main[tabindex="0"]')]
+    .filter(el => el.offsetParent !== null);
+  return all[all.indexOf(current) + dir] ?? null;
+}
+
+// ─── Selection / breadcrumb ───────────────────────────────────────────────────
+function setSelected(main, path) {
+  if (selectedMain) selectedMain.classList.remove('active');
+  selectedMain = main;
+  main.classList.add('active');
+  currentPath = path;
+  const bc = document.getElementById('breadcrumb');
+  bc.textContent = path;
+  bc.classList.remove('empty');
+  document.getElementById('copy-path-btn').style.display = '';
+}
+
+function clearBreadcrumb() {
+  const bc = document.getElementById('breadcrumb');
+  bc.textContent = 'Click a node to see its path';
+  bc.classList.add('empty');
+  document.getElementById('copy-path-btn').style.display = 'none';
+  currentPath = null;
+  if (selectedMain) { selectedMain.classList.remove('active'); selectedMain = null; }
+}
+
+function copyPath() {
+  if (currentPath) copyToClipboard(currentPath, document.getElementById('copy-path-btn'));
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+function onSearch(query) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => applySearch(query.trim()), 150);
+}
+
+function applySearch(query) {
+  const countEl = document.getElementById('search-count');
+  document.querySelectorAll('.tree-node').forEach(n =>
+    n.classList.remove('dimmed', 'search-match'));
+
+  if (!query) { countEl.textContent = ''; return; }
+
+  const q = query.toLowerCase();
+  let matches = 0, firstMatch = null;
+
+  document.querySelectorAll('.tree-node').forEach(node => {
+    if ((node.dataset.searchable || '').includes(q)) {
+      node.classList.add('search-match');
+      matches++;
+      if (!firstMatch) firstMatch = node;
+    } else {
+      node.classList.add('dimmed');
+    }
+  });
+
+  document.querySelectorAll('.tree-node.search-match').forEach(node => {
+    let anc = node.parentElement?.closest('.tree-node');
+    while (anc) {
+      anc.classList.remove('dimmed');
+      anc.classList.remove('collapsed');
+      anc.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
+      anc = anc.parentElement?.closest('.tree-node');
+    }
+  });
+
+  countEl.textContent = matches > 0
+    ? `${matches} match${matches !== 1 ? 'es' : ''}` : 'No matches';
+  firstMatch?.querySelector('.node-main')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-count').textContent = '';
+  document.querySelectorAll('.tree-node').forEach(n =>
+    n.classList.remove('dimmed', 'search-match'));
+}
+
+// ─── Expand / Collapse ────────────────────────────────────────────────────────
+function expandAll() {
+  document.querySelectorAll('.tree-node.collapsed').forEach(node => {
+    node.classList.remove('collapsed');
+    node.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
+  });
+}
+function collapseAll() {
+  document.querySelectorAll('.tree-node').forEach(node => {
+    if (node.querySelector(':scope > .children')) {
+      node.classList.add('collapsed');
+      node.querySelector(':scope > .node-main > .toggle')?.classList.remove('open');
+    }
+  });
+}
+
+// ─── Clipboard ────────────────────────────────────────────────────────────────
+function copyToClipboard(text, trigger) {
+  navigator.clipboard.writeText(text).then(() => {
+    const toast = document.getElementById('copy-toast');
+    const rect  = trigger.getBoundingClientRect();
+    toast.style.left = `${rect.left}px`;
+    toast.style.top  = `${rect.top - 28}px`;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1300);
+  }).catch(() => {});
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function escStr(s) {
+  return s.replace(/\\/g,'\\\\').replace(/"/g,'\\"')
+          .replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/\t/g,'\\t');
+}
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function fmtBytes(b) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1048576) return `${(b/1024).toFixed(1)} KB`;
+  return `${(b/1048576).toFixed(1)} MB`;
+}
+</script>
+</body>
+</html>
