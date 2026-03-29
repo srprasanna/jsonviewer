@@ -30,6 +30,7 @@
       --bg-deep:   #090c12;
       --bg-panel:  #0a0d14;
       --bg-schema: #08090f;
+      --bg-header: #141b27;
       --bg-input:  #1a2035;
       --bg-node-h: #141c2e;
       --bg-node-f: #162038;
@@ -38,8 +39,8 @@
       --bg-err:    #2d1515;
       --bg-warn:   #1f1200;
 
-      --border:    #1e2433;
-      --border-s:  #161d2c;
+      --border:    #2e3f58;
+      --border-s:  #1e2c40;
       --border-e:  #7f1d1d;
       --border-w:  #7c3a00;
 
@@ -84,6 +85,7 @@
       --bg-deep:   #f1f5f9;
       --bg-panel:  #ffffff;
       --bg-schema: #fafafa;
+      --bg-header: #edf1f7;
       --bg-input:  #f1f5f9;
       --bg-node-h: #f1f5f9;
       --bg-node-f: #dbeafe;
@@ -92,8 +94,8 @@
       --bg-err:    #fff1f2;
       --bg-warn:   #fff7ed;
 
-      --border:   #e2e8f0;
-      --border-s: #e8edf5;
+      --border:   #b8c8d8;
+      --border-s: #cdd8e3;
       --border-e: #fca5a5;
       --border-w: #fdba74;
 
@@ -155,7 +157,7 @@
       align-items: center;
       gap: 10px;
       flex-shrink: 0;
-      background: var(--bg);
+      background: var(--bg-header);
     }
 
     header h1 { font-size: 15px; font-weight: 700; color: var(--text-h); white-space: nowrap; }
@@ -212,7 +214,7 @@
       text-transform: uppercase; letter-spacing: .05em; color: var(--text-3);
       border-bottom: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center;
-      flex-shrink: 0; background: var(--bg);
+      flex-shrink: 0; background: var(--bg-header);
     }
     .panel-actions { display: flex; gap: 5px; align-items: center; }
 
@@ -280,7 +282,7 @@
     .tree-toolbar {
       padding: 7px 12px; border-bottom: 1px solid var(--border);
       display: flex; align-items: center; gap: 8px; flex-shrink: 0;
-      background: var(--bg);
+      background: var(--bg-header);
     }
     .tree-info { font-size: 12px; color: var(--text-3); white-space: nowrap; flex-shrink: 0; }
 
@@ -440,7 +442,7 @@
       .mobile-tabs {
         display: flex; flex-shrink: 0;
         border-bottom: 1px solid var(--border);
-        background: var(--bg);
+        background: var(--bg-header);
       }
       .tab-btn {
         flex: 1; display: flex; align-items: center; justify-content: center;
@@ -454,7 +456,7 @@
       /* URL row below tabs */
       .mobile-url-row {
         display: flex; gap: 6px; padding: 8px 12px; flex-shrink: 0;
-        border-bottom: 1px solid var(--border); background: var(--bg);
+        border-bottom: 1px solid var(--border); background: var(--bg-header);
       }
       .mobile-url-row .url-input { flex: 1; font-size: 13px; padding: 7px 10px; }
 
