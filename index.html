@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JSON Viewer</title>
+  <title>JSON Viewer — Paste, validate & explore JSON</title>
+  <meta name="description" content="A fast, free JSON viewer. Paste or load JSON to validate, explore the tree, search keys and values, and validate against a JSON Schema." />
+  <meta property="og:title" content="JSON Viewer" />
+  <meta property="og:description" content="Paste or load JSON to validate, explore the tree, search keys and values, and validate against a JSON Schema." />
+  <meta name="theme-color" content="#0f1117" />
 
   <!-- CodeMirror 5 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
@@ -420,6 +424,70 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--scroll); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--scroll-h); }
+
+    /* ── Mobile tab bar (desktop: hidden) ──────────────────────────── */
+    .mobile-tabs { display: none; }
+    .mobile-url-row { display: none; }
+    .mobile-only { display: none !important; }
+
+    /* ── Mobile responsive ─────────────────────────────────────────── */
+    @media (max-width: 767px) {
+      /* Compact header */
+      header { padding: 8px 12px; flex-wrap: nowrap; }
+      .url-bar { display: none; }
+
+      /* Tab bar */
+      .mobile-tabs {
+        display: flex; flex-shrink: 0;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg);
+      }
+      .tab-btn {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        gap: 6px; padding: 10px 0; font-size: 13px; font-weight: 600;
+        background: none; border: none; border-radius: 0; color: var(--text-3);
+        cursor: pointer; border-bottom: 3px solid transparent;
+        transition: color .15s, border-color .15s;
+      }
+      .tab-btn.active { color: var(--accent-fg); border-bottom-color: var(--accent); }
+
+      /* URL row below tabs */
+      .mobile-url-row {
+        display: flex; gap: 6px; padding: 8px 12px; flex-shrink: 0;
+        border-bottom: 1px solid var(--border); background: var(--bg);
+      }
+      .mobile-url-row .url-input { flex: 1; font-size: 13px; padding: 7px 10px; }
+
+      /* Stack panels, show only active */
+      .main { flex-direction: column; }
+
+      .input-panel {
+        width: 100%; min-width: 0; border-right: none;
+        flex: 1; display: none;
+      }
+      .input-panel.tab-active { display: flex; }
+
+      .tree-panel { display: none; }
+      .tree-panel.tab-active { display: flex; }
+
+      /* Show mobile-only elements */
+      .mobile-only { display: inline-flex !important; }
+
+      /* Larger touch targets */
+      button { min-height: 34px; }
+      .btn-sm { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+      .btn-icon { width: 34px; height: 34px; }
+      .node-main { min-height: 34px; padding: 4px 6px; }
+
+      /* Slightly larger tree text on mobile */
+      .node-key, .val-string, .val-number,
+      .val-boolean, .val-null, .val-bracket { font-size: 14px; }
+
+      /* Bigger search input */
+      .search-input { font-size: 14px; padding: 7px 70px 7px 30px; }
+      .tree-toolbar { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+      .search-wrap { order: 3; flex-basis: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -451,9 +519,35 @@
   <button class="btn-icon" id="theme-btn" onclick="toggleTheme()" title="Toggle light / dark mode"></button>
 </header>
 
+<!-- Mobile tab bar -->
+<nav class="mobile-tabs" id="mobile-tabs">
+  <button class="tab-btn active" id="tab-editor" onclick="switchTab('editor')">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+    </svg>
+    Editor
+  </button>
+  <button class="tab-btn" id="tab-tree" onclick="switchTab('tree')">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3 7h4m0 0v10m0-10h10M7 12h6m-6 5h4"/>
+    </svg>
+    Tree
+  </button>
+</nav>
+
+<!-- Mobile URL row (hidden on desktop) -->
+<div class="mobile-url-row">
+  <input type="text" class="url-input" id="mobile-url-input" placeholder="https://… load JSON from URL" />
+  <button class="btn-ghost" onclick="loadFromUrlMobile()">Load</button>
+  <label style="display:contents">
+    <button class="btn-ghost" onclick="this.closest('label').querySelector('input').click()">File</button>
+    <input type="file" accept=".json,application/json,text/plain" style="display:none" onchange="loadFromFile(this)">
+  </label>
+</div>
+
 <div class="main">
   <!-- Left -->
-  <div class="input-panel">
+  <div class="input-panel" id="input-panel">
     <div class="panel-header">
       Input
       <div class="panel-actions">
@@ -483,7 +577,7 @@
   </div>
 
   <!-- Right -->
-  <div class="tree-panel">
+  <div class="tree-panel" id="tree-panel">
     <div class="tree-toolbar">
       <span class="tree-info" id="tree-info">No data</span>
       <div class="search-wrap">
@@ -624,6 +718,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('url-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') loadFromUrl();
   });
+  document.getElementById('mobile-url-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadFromUrlMobile();
+  });
+
+  // Set initial mobile tab state
+  if (isMobile()) switchTab('editor');
 });
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -663,6 +763,8 @@ function parseJson(auto = false) {
   currentData = parsed;
   setStatus('ok', 'Valid JSON');
   renderTree(parsed);
+
+  if (isMobile()) switchTab('tree');
 
   if (document.getElementById('schema-panel').classList.contains('open')) {
     validateSchema(true);
@@ -721,6 +823,27 @@ function loadFromFile(input) {
   reader.onload = e => { editor.setValue(e.target.result); parseJson(); };
   reader.readAsText(file);
   input.value = '';
+}
+
+// ─── Mobile helpers ───────────────────────────────────────────────────────────
+function isMobile() {
+  return window.getComputedStyle(document.getElementById('mobile-tabs')).display !== 'none';
+}
+
+function switchTab(tab) {
+  document.getElementById('input-panel').classList.toggle('tab-active', tab === 'editor');
+  document.getElementById('tree-panel').classList.toggle('tab-active', tab === 'tree');
+  document.getElementById('tab-editor').classList.toggle('active', tab === 'editor');
+  document.getElementById('tab-tree').classList.toggle('active', tab === 'tree');
+  if (tab === 'editor') editor?.refresh();
+}
+
+function loadFromUrlMobile() {
+  const url = document.getElementById('mobile-url-input').value.trim();
+  if (!url) return;
+  // Sync to desktop input and reuse the same loader
+  document.getElementById('url-input').value = url;
+  loadFromUrl();
 }
 
 function setupDragDrop() {
