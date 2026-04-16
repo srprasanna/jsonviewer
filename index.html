@@ -797,12 +797,22 @@ function minifyJson() {
 }
 
 function clearAll() {
+  editor.setOption('mode', { name: 'javascript', json: true });
   editor.setValue('');
   clearError(); clearSchemaErrors(); resetTree();
   setStatus('ready', 'Ready');
 }
 
 // ─── URL / File loading ───────────────────────────────────────────────────────
+const LARGE_FILE_THRESHOLD = 500 * 1024; // 500 KB
+
+function setEditorContent(text) {
+  const large = text.length > LARGE_FILE_THRESHOLD;
+  editor.setOption('mode', large ? null : { name: 'javascript', json: true });
+  editor.setValue(text);
+  if (large) setStatus('warn', 'Large file — highlighting off');
+}
+
 async function loadFromUrl() {
   const url = document.getElementById('url-input').value.trim();
   if (!url) return;
@@ -810,7 +820,7 @@ async function loadFromUrl() {
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-    editor.setValue(await res.text());
+    setEditorContent(await res.text());
     parseJson();
   } catch (e) {
     showError('URL load failed: ' + e.message);
@@ -822,7 +832,7 @@ function loadFromFile(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => { editor.setValue(e.target.result); parseJson(); };
+  reader.onload = e => { setEditorContent(e.target.result); parseJson(); };
   reader.readAsText(file);
   input.value = '';
 }
@@ -861,7 +871,7 @@ function setupDragDrop() {
     const file = e.dataTransfer.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = ev => { editor.setValue(ev.target.result); parseJson(); };
+    reader.onload = ev => { setEditorContent(ev.target.result); parseJson(); };
     reader.readAsText(file);
   });
 }
@@ -916,13 +926,23 @@ function clearSchema() { schemaCM.setValue(''); clearSchemaErrors(); }
 function renderTree(data) {
   const container = document.getElementById('tree-container');
   container.innerHTML = '';
-  container.appendChild(buildNode(data, null, '$'));
+  const root = buildNode(data, null, '$');
+  container.appendChild(root);
 
-  const n    = container.querySelectorAll('.tree-node').length;
-  const type = Array.isArray(data) ? 'array'
-             : (data !== null && typeof data === 'object') ? 'object' : 'value';
-  document.getElementById('tree-info').textContent =
-    `${type} · ${n} node${n !== 1 ? 's' : ''}`;
+  // Auto-expand root so top-level keys are visible immediately; children are lazy
+  if (root._lazyRender) {
+    root._lazyRender();
+    root.classList.remove('collapsed');
+    root.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
+  }
+
+  const isArr = Array.isArray(data);
+  const isObj = !isArr && data !== null && typeof data === 'object';
+  const type  = isArr ? 'array' : isObj ? 'object' : 'value';
+  const n     = isArr ? data.length : isObj ? Object.keys(data).length : 1;
+  document.getElementById('tree-info').textContent = (isArr || isObj)
+    ? `${type} · ${n.toLocaleString()} ${isArr ? 'item' : 'key'}${n !== 1 ? 's' : ''}`
+    : type;
 
   clearBreadcrumb(); clearSearch();
 }
@@ -937,8 +957,8 @@ function buildNode(value, key, path) {
   const wrapper = document.createElement('div');
   wrapper.className = 'tree-node';
 
-  const isObj  = value !== null && typeof value === 'object';
-  const isArr  = Array.isArray(value);
+  const isObj   = value !== null && typeof value === 'object';
+  const isArr   = Array.isArray(value);
   const entries = isObj ? (isArr ? value : Object.entries(value)) : null;
   const hasKids = !!(entries && entries.length > 0);
 
@@ -952,17 +972,17 @@ function buildNode(value, key, path) {
   main.dataset.path = path;
 
   const toggle = document.createElement('span');
-  toggle.className = 'toggle ' + (hasKids ? 'open' : 'leaf');
+  toggle.className = 'toggle ' + (hasKids ? '' : 'leaf');
   toggle.textContent = '▶';
   main.appendChild(toggle);
 
   if (key !== null) {
-    const keyEl   = document.createElement('span');
-    keyEl.className   = 'node-key';
+    const keyEl = document.createElement('span');
+    keyEl.className = 'node-key';
     keyEl.textContent = `"${key}"`;
     main.appendChild(keyEl);
-    const colon   = document.createElement('span');
-    colon.className   = 'node-colon';
+    const colon = document.createElement('span');
+    colon.className = 'node-colon';
     colon.textContent = ':';
     main.appendChild(colon);
   }
@@ -1018,14 +1038,6 @@ function buildNode(value, key, path) {
     const childWrap = document.createElement('div');
     childWrap.className = 'children';
 
-    if (isArr) {
-      value.forEach((item, i) =>
-        childWrap.appendChild(buildNode(item, i, buildPath(path, i, true))));
-    } else {
-      Object.entries(value).forEach(([k, v]) =>
-        childWrap.appendChild(buildNode(v, k, buildPath(path, k, false))));
-    }
-
     const closeRow = document.createElement('div');
     closeRow.className = 'node-close';
     const closeBracket = document.createElement('span');
@@ -1036,14 +1048,55 @@ function buildNode(value, key, path) {
     wrapper.appendChild(childWrap);
     wrapper.appendChild(closeRow);
 
-    const doToggle = () => {
-      const col = wrapper.classList.toggle('collapsed');
-      toggle.classList.toggle('open', !col);
+    // Children are rendered lazily in batches of 200 to avoid blocking the main thread
+    let childrenRendered = false;
+    const CHUNK = 200;
+    const total = entries.length;
+
+    const renderBatch = (start, end) => {
+      if (isArr) {
+        for (let i = start; i < end; i++)
+          childWrap.appendChild(buildNode(value[i], i, buildPath(path, i, true)));
+      } else {
+        for (let i = start; i < end; i++) {
+          const [k, v] = entries[i];
+          childWrap.appendChild(buildNode(v, k, buildPath(path, k, false)));
+        }
+      }
     };
+
+    const scheduleRest = (idx) => {
+      if (idx >= total) return;
+      const cb = () => { renderBatch(idx, Math.min(idx + CHUNK, total)); scheduleRest(idx + CHUNK); };
+      typeof requestIdleCallback !== 'undefined' ? requestIdleCallback(cb) : setTimeout(cb, 0);
+    };
+
+    const renderChildren = () => {
+      if (childrenRendered) return;
+      childrenRendered = true;
+      renderBatch(0, Math.min(CHUNK, total));
+      if (total > CHUNK) scheduleRest(CHUNK);
+    };
+
+    const doToggle = () => {
+      if (wrapper.classList.contains('collapsed')) {
+        renderChildren();
+        wrapper.classList.remove('collapsed');
+        toggle.classList.add('open');
+      } else {
+        wrapper.classList.add('collapsed');
+        toggle.classList.remove('open');
+      }
+    };
+
+    wrapper.classList.add('collapsed');
+
     main.addEventListener('click', e => {
       if (copyBtn.contains(e.target)) return;
       doToggle();
     });
+
+    wrapper._lazyRender = renderChildren;
   }
 
   return wrapper;
@@ -1096,6 +1149,36 @@ function appendPrimitive(container, value) {
   }
 }
 
+// ─── Search helpers ───────────────────────────────────────────────────────────
+function findNodeByPath(path) {
+  const escaped = path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return document.querySelector(`.tree-node[data-path="${escaped}"]`);
+}
+
+function parentPath(path) {
+  if (path === '$') return null;
+  const m = path.match(/^(.+)(\.[^.[]+|\[[^\]]+\])$/);
+  return m ? m[1] : '$';
+}
+
+const SEARCH_LIMIT = 5000;
+function collectMatches(data, key, path, q, results) {
+  if (results.length >= SEARCH_LIMIT) return;
+  const isObj   = data !== null && typeof data === 'object';
+  const keyStr  = key !== null ? String(key).toLowerCase() : '';
+  const valStr  = isObj ? '' : (data === null ? 'null' : String(data).toLowerCase());
+  if (keyStr.includes(q) || valStr.includes(q)) results.push(path);
+  if (Array.isArray(data)) {
+    for (let i = 0; i < data.length && results.length < SEARCH_LIMIT; i++)
+      collectMatches(data[i], i, buildPath(path, i, true), q, results);
+  } else if (isObj) {
+    for (const [k, v] of Object.entries(data)) {
+      if (results.length >= SEARCH_LIMIT) break;
+      collectMatches(v, k, buildPath(path, k, false), q, results);
+    }
+  }
+}
+
 // ─── Keyboard navigation ──────────────────────────────────────────────────────
 function handleKeyNav(e, main, wrapper) {
   switch (e.key) {
@@ -1104,6 +1187,7 @@ function handleKeyNav(e, main, wrapper) {
     case 'ArrowRight':
       e.preventDefault();
       if (wrapper.classList.contains('collapsed')) {
+        if (wrapper._lazyRender) wrapper._lazyRender();
         wrapper.classList.remove('collapsed');
         wrapper.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
       } else {
@@ -1112,7 +1196,7 @@ function handleKeyNav(e, main, wrapper) {
       break;
     case 'ArrowLeft':
       e.preventDefault();
-      if (!wrapper.classList.contains('collapsed') && wrapper.querySelector('.children')) {
+      if (!wrapper.classList.contains('collapsed') && wrapper._lazyRender !== undefined) {
         wrapper.classList.add('collapsed');
         wrapper.querySelector(':scope > .node-main > .toggle')?.classList.remove('open');
       } else {
@@ -1122,7 +1206,9 @@ function handleKeyNav(e, main, wrapper) {
       break;
     case ' ':
       e.preventDefault();
-      if (wrapper.querySelector('.children')) {
+      if (wrapper._lazyRender !== undefined) {
+        const expanding = wrapper.classList.contains('collapsed');
+        if (expanding) wrapper._lazyRender();
         const col = wrapper.classList.toggle('collapsed');
         wrapper.querySelector(':scope > .node-main > .toggle')?.classList.toggle('open', !col);
       }
@@ -1172,34 +1258,50 @@ function applySearch(query) {
   document.querySelectorAll('.tree-node').forEach(n =>
     n.classList.remove('dimmed', 'search-match'));
 
-  if (!query) { countEl.textContent = ''; return; }
+  if (!query || !currentData) { countEl.textContent = ''; return; }
 
   const q = query.toLowerCase();
-  let matches = 0, firstMatch = null;
+  const matchPaths = [];
+  collectMatches(currentData, null, '$', q, matchPaths);
 
+  if (matchPaths.length === 0) {
+    countEl.textContent = 'No matches';
+    document.querySelectorAll('.tree-node').forEach(n => n.classList.add('dimmed'));
+    return;
+  }
+
+  // Build set of paths that must stay visible (matches + all their ancestors)
+  const matchSet = new Set(matchPaths);
+  const keepSet  = new Set(matchPaths);
+  matchPaths.forEach(p => {
+    let cur = p;
+    while (cur) { keepSet.add(cur); cur = parentPath(cur); }
+  });
+
+  // Expand ancestors root-first so child nodes exist in DOM before we try to find them
+  const toExpand = [...keepSet].sort((a, b) => a.length - b.length);
+  toExpand.forEach(p => {
+    const node = findNodeByPath(p);
+    if (!node) return;
+    if (node._lazyRender) node._lazyRender();
+    node.classList.remove('collapsed');
+    node.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
+  });
+
+  // Mark / dim every rendered node
   document.querySelectorAll('.tree-node').forEach(node => {
-    if ((node.dataset.searchable || '').includes(q)) {
-      node.classList.add('search-match');
-      matches++;
-      if (!firstMatch) firstMatch = node;
-    } else {
-      node.classList.add('dimmed');
-    }
+    const p = node.dataset.path;
+    if (!p) return;
+    if (matchSet.has(p))      node.classList.add('search-match');
+    else if (!keepSet.has(p)) node.classList.add('dimmed');
   });
 
-  document.querySelectorAll('.tree-node.search-match').forEach(node => {
-    let anc = node.parentElement?.closest('.tree-node');
-    while (anc) {
-      anc.classList.remove('dimmed');
-      anc.classList.remove('collapsed');
-      anc.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
-      anc = anc.parentElement?.closest('.tree-node');
-    }
-  });
+  countEl.textContent = matchPaths.length >= SEARCH_LIMIT
+    ? `${SEARCH_LIMIT.toLocaleString()}+ matches`
+    : `${matchPaths.length} match${matchPaths.length !== 1 ? 'es' : ''}`;
 
-  countEl.textContent = matches > 0
-    ? `${matches} match${matches !== 1 ? 'es' : ''}` : 'No matches';
-  firstMatch?.querySelector('.node-main')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.querySelector('.tree-node.search-match')
+    ?.querySelector('.node-main')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function clearSearch() {
@@ -1211,10 +1313,18 @@ function clearSearch() {
 
 // ─── Expand / Collapse ────────────────────────────────────────────────────────
 function expandAll() {
-  document.querySelectorAll('.tree-node.collapsed').forEach(node => {
-    node.classList.remove('collapsed');
-    node.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
-  });
+  // Each pass may render new child nodes, so repeat until no new nodes appear
+  let prevCount = 0;
+  while (true) {
+    const nodes = [...document.querySelectorAll('.tree-node')];
+    if (nodes.length === prevCount) break;
+    prevCount = nodes.length;
+    nodes.forEach(node => {
+      if (node._lazyRender) node._lazyRender();
+      node.classList.remove('collapsed');
+      node.querySelector(':scope > .node-main > .toggle')?.classList.add('open');
+    });
+  }
 }
 function collapseAll() {
   document.querySelectorAll('.tree-node').forEach(node => {
